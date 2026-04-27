@@ -1,6 +1,6 @@
 ﻿let conflictAppointmentId = null;
 let pendingAppointment = null;
-let conflictType = null;
+let pendingReminder = null;
 let currentJoinAppointmentId = null;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -9,8 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnJoin = document.getElementById("btnJoinGroup");
     if (btnJoin) {
         btnJoin.addEventListener("click", () => {
-            bootstrap.Modal.getInstance(document.getElementById("conflictModal"))?.hide();
             currentJoinAppointmentId = conflictAppointmentId;
+            bootstrap.Modal.getInstance(document.getElementById("conflictModal"))?.hide();
             new bootstrap.Modal(document.getElementById("joinModal")).show();
         });
     }
@@ -18,6 +18,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnReplace = document.getElementById("btnReplace");
     if (btnReplace) {
         btnReplace.addEventListener("click", replaceAppointment);
+    }
+
+    const conflictModalEl = document.getElementById("conflictModal");
+    if (conflictModalEl) {
+        conflictModalEl.addEventListener("hidden.bs.modal", () => {
+            resetModalState();
+        });
+    }
+
+    const joinModalEl = document.getElementById("joinModal");
+    if (joinModalEl) {
+        joinModalEl.addEventListener("hidden.bs.modal", () => {
+            const participantName = document.getElementById("participantName");
+            if (participantName) participantName.value = "";
+        });
     }
 });
 
@@ -39,6 +54,17 @@ async function createAppointment() {
         return showAlert("danger", "Giờ bắt đầu phải nhỏ hơn giờ kết thúc");
     }
 
+    if (reminderTime && new Date(reminderTime) >= new Date(model.startTime)) {
+        return showAlert("danger", "Reminder time phải nhỏ hơn giờ bắt đầu");
+    }
+
+    pendingReminder = reminderTime
+        ? {
+            reminderTime: reminderTime,
+            reminderMessage: reminderMessage
+        }
+        : null;
+
     try {
         const res = await fetch("/api/appointment", {
             method: "POST",
@@ -55,6 +81,7 @@ async function createAppointment() {
                 await addReminder(data.data.id, reminderTime, reminderMessage);
             }
 
+            pendingReminder = null;
             resetForm();
             loadAppointments();
             return;
@@ -63,7 +90,6 @@ async function createAppointment() {
         if (res.status === 409) {
             conflictAppointmentId = data.conflictId;
             pendingAppointment = model;
-            conflictType = data.type;
             showConflict(data.message, data.type);
             return;
         }
@@ -91,8 +117,10 @@ async function addReminder(appointmentId, reminderTime, reminderMessage) {
 }
 
 function showConflict(message, type) {
-    document.getElementById("conflictMessage").textContent = message;
+    const messageEl = document.getElementById("conflictMessage");
+    if (messageEl) messageEl.textContent = message;
 
+    const conflictHint = document.getElementById("conflictHint");
     const btnJoin = document.getElementById("btnJoinGroup");
     const btnReplace = document.getElementById("btnReplace");
 
@@ -101,8 +129,14 @@ function showConflict(message, type) {
 
     if (type === "group_meeting_conflict") {
         if (btnJoin) btnJoin.classList.remove("d-none");
+        if (conflictHint) {
+            conflictHint.textContent = "Bạn có thể join group meeting này nếu muốn tham gia thay vì tạo lịch mới.";
+        }
     } else {
         if (btnReplace) btnReplace.classList.remove("d-none");
+        if (conflictHint) {
+            conflictHint.textContent = "Bạn có thể đổi sang thời gian khác hoặc thay thế lịch cũ bằng lịch mới này.";
+        }
     }
 
     new bootstrap.Modal(document.getElementById("conflictModal")).show();
@@ -112,15 +146,36 @@ async function replaceAppointment() {
     if (!conflictAppointmentId || !pendingAppointment) return;
 
     try {
-        await fetch(`/api/appointment/${conflictAppointmentId}`, {
+        const deleteRes = await fetch(`/api/appointment/${conflictAppointmentId}`, {
             method: "DELETE"
         });
 
-        await fetch("/api/appointment", {
+        const deleteData = await deleteRes.json();
+        if (!deleteRes.ok) {
+            showAlert("danger", deleteData.message || "Không thể xóa lịch cũ");
+            return;
+        }
+
+        const createRes = await fetch("/api/appointment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(pendingAppointment)
         });
+
+        const createData = await createRes.json();
+
+        if (!createRes.ok) {
+            showAlert("danger", createData.message || "Không thể tạo lịch mới sau khi thay thế");
+            return;
+        }
+
+        if (pendingReminder && createData?.data?.id) {
+            await addReminder(
+                createData.data.id,
+                pendingReminder.reminderTime,
+                pendingReminder.reminderMessage
+            );
+        }
 
         bootstrap.Modal.getInstance(document.getElementById("conflictModal"))?.hide();
         showAlert("success", "Đã thay thế lịch cũ thành công");
@@ -184,6 +239,8 @@ async function loadAppointments() {
                             <th>Bắt đầu</th>
                             <th>Kết thúc</th>
                             <th>Loại</th>
+                            <th>Reminder</th>
+                            <th>Participants</th>
                             <th>Thao tác</th>
                         </tr>
                     </thead>
@@ -198,6 +255,16 @@ async function loadAppointments() {
                                     ${item.isGroupMeeting
                 ? '<span class="badge text-bg-danger">Group</span>'
                 : '<span class="badge text-bg-secondary">Cá nhân</span>'}
+                                </td>
+                                <td>
+                                    ${item.reminders && item.reminders.length > 0
+                ? `<span class="badge text-bg-success">${item.reminders.length} reminder</span>`
+                : '<span class="badge text-bg-light text-dark">No reminder</span>'}
+                                </td>
+                                <td>
+                                    ${item.participants && item.participants.length > 0
+                ? `<span class="badge text-bg-primary">${item.participants.length} participant(s)</span>`
+                : (item.isGroupMeeting ? '<span class="badge text-bg-light text-dark">0 participant</span>' : '—')}
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-danger" onclick="deleteAppointment(${item.id})">Xóa</button>
@@ -241,6 +308,22 @@ function resetForm() {
     document.getElementById("isGroupMeeting").checked = false;
     document.getElementById("reminderTime").value = "";
     document.getElementById("reminderMessage").value = "";
+}
+
+function resetModalState() {
+    const conflictMessage = document.getElementById("conflictMessage");
+    if (conflictMessage) conflictMessage.textContent = "";
+
+    const conflictHint = document.getElementById("conflictHint");
+    if (conflictHint) conflictHint.textContent = "";
+
+    const participantName = document.getElementById("participantName");
+    if (participantName) participantName.value = "";
+
+    conflictAppointmentId = null;
+    pendingAppointment = null;
+    pendingReminder = null;
+    currentJoinAppointmentId = null;
 }
 
 function showAlert(type, msg) {

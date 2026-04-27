@@ -51,6 +51,9 @@ namespace WebApplication1.Controllers
             if (model == null)
                 return BadRequest(new { message = "Dữ liệu không hợp lệ" });
 
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
             if (string.IsNullOrWhiteSpace(model.Name))
                 return BadRequest(new { message = "Tên lịch hẹn không được để trống" });
 
@@ -102,10 +105,20 @@ namespace WebApplication1.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] Appointment model)
         {
+            if (model == null)
+                return BadRequest(new { message = "Dữ liệu không hợp lệ" });
+
             if (id != model.Id)
                 return BadRequest(new { message = "Id không khớp" });
 
-            var existing = await _context.Appointments.FindAsync(id);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var existing = await _context.Appointments
+                .Include(a => a.Reminders)
+                .Include(a => a.Participants)
+                .FirstOrDefaultAsync(a => a.Id == id);
+
             if (existing == null)
                 return NotFound(new { message = "Không tìm thấy lịch hẹn" });
 
@@ -135,6 +148,13 @@ namespace WebApplication1.Controllers
             existing.Location = model.Location;
             existing.StartTime = model.StartTime;
             existing.EndTime = model.EndTime;
+
+            // Nếu chuyển từ group meeting sang cá nhân thì xóa participants để dữ liệu sạch hơn
+            if (existing.IsGroupMeeting && !model.IsGroupMeeting)
+            {
+                _context.Participants.RemoveRange(existing.Participants);
+            }
+
             existing.IsGroupMeeting = model.IsGroupMeeting;
 
             await _context.SaveChangesAsync();
@@ -171,6 +191,9 @@ namespace WebApplication1.Controllers
         [HttpPost("{id}/join-group")]
         public async Task<IActionResult> JoinGroup(int id, [FromBody] JoinGroupRequest request)
         {
+            if (request == null)
+                return BadRequest(new { message = "Dữ liệu không hợp lệ" });
+
             if (string.IsNullOrWhiteSpace(request.UserName))
                 return BadRequest(new { message = "Tên người tham gia không được để trống" });
 
@@ -181,10 +204,23 @@ namespace WebApplication1.Controllers
             if (!appointment.IsGroupMeeting)
                 return BadRequest(new { message = "Lịch này không phải group meeting" });
 
+            var existingParticipant = await _context.Participants
+                .FirstOrDefaultAsync(p =>
+                    p.AppointmentId == id &&
+                    p.UserName.Trim().ToLower() == request.UserName.Trim().ToLower());
+
+            if (existingParticipant != null)
+            {
+                return Conflict(new
+                {
+                    message = "Người tham gia này đã tồn tại trong group meeting"
+                });
+            }
+
             var participant = new Participant
             {
                 AppointmentId = id,
-                UserName = request.UserName
+                UserName = request.UserName.Trim()
             };
 
             _context.Participants.Add(participant);
@@ -201,6 +237,9 @@ namespace WebApplication1.Controllers
         [HttpPost("{id}/reminders")]
         public async Task<IActionResult> AddReminder(int id, [FromBody] ReminderRequest request)
         {
+            if (request == null)
+                return BadRequest(new { message = "Dữ liệu không hợp lệ" });
+
             var appointment = await _context.Appointments.FindAsync(id);
             if (appointment == null)
                 return NotFound(new { message = "Không tìm thấy lịch hẹn" });
@@ -211,11 +250,24 @@ namespace WebApplication1.Controllers
             if (request.ReminderTime >= appointment.StartTime)
                 return BadRequest(new { message = "Thời gian nhắc phải nhỏ hơn giờ bắt đầu" });
 
+            var existingReminder = await _context.Reminders
+                .FirstOrDefaultAsync(r =>
+                    r.AppointmentId == id &&
+                    r.ReminderTime == request.ReminderTime);
+
+            if (existingReminder != null)
+            {
+                return Conflict(new
+                {
+                    message = "Reminder này đã tồn tại"
+                });
+            }
+
             var reminder = new Reminder
             {
                 AppointmentId = id,
                 ReminderTime = request.ReminderTime,
-                Message = request.Message
+                Message = request.Message?.Trim()
             };
 
             _context.Reminders.Add(reminder);
