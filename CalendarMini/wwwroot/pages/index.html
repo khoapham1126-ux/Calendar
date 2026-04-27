@@ -1,0 +1,230 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đặt lịch hẹn</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <style>
+        body {
+            background: linear-gradient(180deg, #fff7f7 0%, #f7f9fc 100%);
+        }
+
+        .page-shell {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            color: #fff;
+            border-radius: 24px;
+            padding: 28px;
+            box-shadow: 0 18px 40px rgba(185, 28, 28, 0.18);
+            position: relative;
+            overflow: hidden;
+        }
+
+            .hero::after {
+                content: "";
+                position: absolute;
+                right: -40px;
+                top: -40px;
+                width: 180px;
+                height: 180px;
+                border-radius: 50%;
+                background: rgba(255,255,255,0.08);
+            }
+
+            .hero h1 {
+                font-weight: 800;
+                margin-bottom: 8px;
+                font-size: 2rem;
+            }
+
+            .hero p {
+                margin: 0;
+                opacity: 0.95;
+            }
+
+        .section-card {
+            background: #fff;
+            border: 1px solid #e9edf3;
+            border-radius: 22px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+        }
+
+        .section-title {
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 18px;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .form-control, .form-check-input {
+            border-radius: 14px;
+        }
+
+            .form-control:focus {
+                border-color: #ef4444;
+                box-shadow: 0 0 0 3px rgba(239,68,68,.12);
+            }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.14);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .empty-state {
+            border: 1px dashed #dbe2ea;
+            border-radius: 18px;
+            padding: 26px;
+            text-align: center;
+            color: #6b7280;
+            background: #fafbfc;
+        }
+
+        .badge-soft {
+            background: #fee2e2;
+            color: #b91c1c;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-weight: 700;
+            font-size: .85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <div class="hero mb-4">
+            <div class="pill">📅 Lịch hẹn cá nhân & nhóm</div>
+            <h1>Đặt lịch hẹn</h1>
+            <p>Thêm lịch hẹn, kiểm tra trùng giờ, reminder và group meeting trong một giao diện đơn giản.</p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="section-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="section-title mb-0">Tạo lịch hẹn</h4>
+                        <span class="badge-soft">Form</span>
+                    </div>
+
+                    <div id="formAlert" class="alert d-none" role="alert"></div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Tên lịch hẹn</label>
+                        <input id="name" class="form-control form-control-lg" placeholder="Ví dụ: Họp nhóm tuần">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Địa điểm</label>
+                        <input id="location" class="form-control form-control-lg" placeholder="Ví dụ: Phòng A / Online">
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Giờ bắt đầu</label>
+                            <input id="startTime" type="datetime-local" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Giờ kết thúc</label>
+                            <input id="endTime" type="datetime-local" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mt-4 p-3" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:18px;">
+                        <input id="isGroupMeeting" class="form-check-input" type="checkbox" role="switch">
+                        <label class="form-check-label fw-semibold" for="isGroupMeeting">Đây là group meeting</label>
+                        <div class="text-muted small mt-1">Nếu trùng tên + duration, hệ thống sẽ hỏi join.</div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="mb-3">
+                        <label class="form-label">Reminder time</label>
+                        <input id="reminderTime" type="datetime-local" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Reminder message</label>
+                        <input id="reminderMessage" class="form-control" placeholder="Nhắc trước 15 phút">
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-danger btn-lg px-4" onclick="createAppointment()">Lưu lịch hẹn</button>
+                        <button class="btn btn-outline-secondary btn-lg px-4" onclick="resetForm()">Làm mới</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="section-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="section-title mb-0">Lịch hẹn đã đặt</h4>
+                        <button class="btn btn-outline-danger btn-sm" onclick="loadAppointments()">Tải lại</button>
+                    </div>
+
+                    <div id="listArea"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conflict Modal -->
+    <div class="modal fade" id="conflictModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Cảnh báo trùng lịch</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="conflictMessage" class="mb-0"></p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                    <button class="btn btn-primary d-none" id="btnJoinGroup">Join group</button>
+                    <button class="btn btn-danger d-none" id="btnReplace">Thay thế lịch cũ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Modal -->
+    <div class="modal fade" id="joinModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Join group meeting</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Tên người tham gia</label>
+                    <input id="participantName" class="form-control" placeholder="Nhập tên của bạn">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button class="btn btn-danger" onclick="confirmJoinGroup()">Xác nhận</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="appointments.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+@CalendarMini_HostAddress = http://localhost:5032
+
+GET {{CalendarMini_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
